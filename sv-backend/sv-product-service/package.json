@@ -1,0 +1,28 @@
+{
+  "name": "small-vendor-backend",
+  "version": "1.0.0",
+  "description": "SmartDukaan backend — Product management, image embeddings, and similarity search",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
+    "migrate": "node src/migrate.js",
+    "download-model": "node setup-scripts/download-model.js",
+    "convert-model": "python ml-core/convert-to-features.py",
+    "re-embed": "node setup-scripts/re-embed.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "multer": "^2.1.1",
+    "onnxruntime-node": "^1.26.0",
+    "pg": "^8.21.0",
+    "pgvector": "^0.3.0",
+    "sharp": "^0.34.5"
+  }
+}

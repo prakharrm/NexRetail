@@ -1,0 +1,35 @@
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: smartdukaan-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: prakharrmahant
+      POSTGRES_DB: smartdukaan
+    ports:
+      - "5434:5432"   # 5434 on host → 5432 inside container
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  product-service:
+    build: 
+      context: ./sv-product-service
+      dockerfile: Dockerfile
+    container_name: smartdukaan-product-service
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgres://postgres:prakharrmahant@postgres:5432/smartdukaan
+      - PORT=3000
+    depends_on:
+      - postgres
+    volumes:
+      # Mount models and uploads so they persist across container restarts
+      - ./sv-product-service/models:/app/models
+      - ./sv-product-service/uploads:/app/uploads
+
+volumes:
+  pgdata:
