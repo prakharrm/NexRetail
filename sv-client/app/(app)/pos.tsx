@@ -12,6 +12,8 @@ import {
 import {
   useBarcodeScannerOutput,
 } from 'react-native-vision-camera-barcode-scanner';
+import { useAudioPlayer } from 'expo-audio';
+import * as Haptics from 'expo-haptics';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/constants/theme';
 import { useProductStore, Product } from '../../src/store/useProductStore';
 import ProductService from '../../src/services/ProductService';
@@ -25,6 +27,9 @@ interface CartItem {
 // ─── Capture mode: 'barcode' = scanning, 'photo' = about to capture ───────
 type CameraMode = 'barcode' | 'photo';
 
+// ─── How long (ms) after a barcode disappears from frame before we allow rescanning it ───
+const RESCAN_COOLDOWN_MS = 2500;
+
 export default function POSScreen() {
   const { hasPermission, requestPermission } = useCameraPermission();
   const device = useCameraDevice('back');
@@ -36,14 +41,33 @@ export default function POSScreen() {
   const [visualMatches, setVisualMatches] = useState<any[] | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
 
-  const lastScannedRef = useRef<string | null>(null);
-  const lastScannedTimeRef = useRef<number>(0);
+  // ─── Per-barcode "last seen" tracking ─────────────────────────────────────
+  // Maps barcode value → timestamp when it was last seen in a frame
+  const lastSeenTimeRef = useRef<Map<string, number>>(new Map());
+  // Set of barcodes that have already been added during the current "appearance"
+  const scannedInFrameRef = useRef<Set<string>>(new Set());
+  // Interval that prunes stale barcodes and allows rescanning
+  const pruneIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   // Ref so barcode callback always sees latest values without re-creating output
   const isProcessingRef = useRef(false);
   const visualMatchesRef = useRef<any[] | null>(null);
 
   const products = useProductStore((s) => s.products);
   const fetchProducts = useProductStore((s) => s.fetchProducts);
+
+  // ─── Audio player ──────────────────────────────────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const beepPlayer = useAudioPlayer(require('../../assets/beep.wav'));
+
+  const playBeep = useCallback(async () => {
+    try {
+      beepPlayer.seekTo(0);
+      beepPlayer.play();
+    } catch (e) {
+      // Silently ignore audio errors — beep is non-critical
+    }
+  }, [beepPlayer]);
 
   useEffect(() => {
     fetchProducts();
@@ -54,6 +78,24 @@ export default function POSScreen() {
   useEffect(() => { isProcessingRef.current = isProcessing; }, [isProcessing]);
   useEffect(() => { visualMatchesRef.current = visualMatches; }, [visualMatches]);
 
+  // ─── Prune stale "in-frame" barcodes every 300ms ─────────────────────────
+  // If a barcode hasn't been reported in RESCAN_COOLDOWN_MS, remove it from
+  // scannedInFrameRef so it will be scanned again the next time it appears.
+  useEffect(() => {
+    pruneIntervalRef.current = setInterval(() => {
+      const now = Date.now();
+      lastSeenTimeRef.current.forEach((ts, barcode) => {
+        if (now - ts > RESCAN_COOLDOWN_MS) {
+          lastSeenTimeRef.current.delete(barcode);
+          scannedInFrameRef.current.delete(barcode);
+        }
+      });
+    }, 300);
+    return () => {
+      if (pruneIntervalRef.current) clearInterval(pruneIntervalRef.current);
+    };
+  }, []);
+
   // ─── Photo output — stable reference ─────────────────────────────────────
   const photoOutput = usePhotoOutput({ qualityPrioritization: 'balanced' });
 
@@ -62,20 +104,36 @@ export default function POSScreen() {
   useEffect(() => { productsRef.current = products; }, [products]);
 
   const addToCartRef = useRef<(product: Product) => void>(() => { });
+  const playBeepRef = useRef<() => void>(() => { });
+  useEffect(() => { playBeepRef.current = playBeep; }, [playBeep]);
 
   const barcodeOutput = useBarcodeScannerOutput(
     useMemo(() => ({
       barcodeFormats: ['ean-13', 'upc-a', 'upc-e', 'ean-8', 'qr-code', 'code-128', 'code-39'],
       onBarcodeScanned: (barcodes: any[]) => {
         if (!barcodes.length || isProcessingRef.current || visualMatchesRef.current) return;
+
+        const now = Date.now();
+
+        // Update "last seen" time for every barcode currently in frame
+        barcodes.forEach((b) => {
+          if (b.rawValue) lastSeenTimeRef.current.set(b.rawValue, now);
+        });
+
+        // Only process the first barcode and only if not yet scanned this appearance
         const value = barcodes[0].rawValue;
         if (!value) return;
-        const now = Date.now();
-        if (value === lastScannedRef.current && now - lastScannedTimeRef.current < 2000) return;
-        lastScannedRef.current = value;
-        lastScannedTimeRef.current = now;
+        if (scannedInFrameRef.current.has(value)) return; // already added this appearance
+
+        // Mark as scanned for this appearance
+        scannedInFrameRef.current.add(value);
+
         const matched = productsRef.current.find((p) => p.barcode === value || p.sku === value);
-        if (matched) addToCartRef.current(matched);
+        if (matched) {
+          addToCartRef.current(matched);
+          playBeepRef.current();
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
       },
       onError: (error: any) => console.error('Barcode scanner error:', error),
     }), []) // ← empty deps: options object created ONCE, uses refs internally
@@ -92,12 +150,40 @@ export default function POSScreen() {
     setCart((prev) => {
       const existing = prev.find((i) => i.product.id === product.id);
       if (existing) {
+        // Respect stock limit
+        if (existing.quantity >= product.stock) return prev;
         return prev.map((i) =>
           i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i
         );
       }
       return [{ product, quantity: 1 }, ...prev];
     });
+  }, []);
+
+  const increaseQty = useCallback((item: CartItem) => {
+    if (item.quantity >= item.product.stock) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      Alert.alert('Stock Limit', `Only ${item.product.stock} unit(s) of "${item.product.name}" in stock.`);
+      return;
+    }
+    setCart((prev) =>
+      prev.map((i) =>
+        i.product.id === item.product.id ? { ...i, quantity: i.quantity + 1 } : i
+      )
+    );
+  }, []);
+
+  const decreaseQty = useCallback((item: CartItem) => {
+    if (item.quantity <= 1) {
+      // Remove from cart when qty goes to 0
+      setCart((prev) => prev.filter((i) => i.product.id !== item.product.id));
+      return;
+    }
+    setCart((prev) =>
+      prev.map((i) =>
+        i.product.id === item.product.id ? { ...i, quantity: i.quantity - 1 } : i
+      )
+    );
   }, []);
 
   // Keep addToCart ref in sync for barcode callback
@@ -188,7 +274,14 @@ export default function POSScreen() {
         />
 
         <View style={s.cameraOverlay} pointerEvents="box-none">
-          <View style={s.scanFrame} />
+          <View style={s.scanFrame}>
+            {/* Corner accents */}
+            <View style={[s.corner, s.cornerTL]} />
+            <View style={[s.corner, s.cornerTR]} />
+            <View style={[s.corner, s.cornerBL]} />
+            <View style={[s.corner, s.cornerBR]} />
+          </View>
+          <Text style={s.scanHint}>Position barcode inside frame</Text>
           <TouchableOpacity
             style={[s.visualScanBtn, isProcessing && s.visualScanBtnDisabled]}
             onPress={handleVisualScan}
@@ -196,7 +289,7 @@ export default function POSScreen() {
           >
             {isProcessing
               ? <ActivityIndicator color="#fff" />
-              : <Text style={s.visualScanBtnText}>Scan Visually</Text>
+              : <Text style={s.visualScanBtnText}>📷 Scan Visually</Text>
             }
           </TouchableOpacity>
         </View>
@@ -246,6 +339,7 @@ export default function POSScreen() {
         </View>
         {cart.length === 0 ? (
           <View style={s.emptyCart}>
+            <Text style={s.emptyCartIcon}>🛒</Text>
             <Text style={s.emptyCartText}>Scan an item to start a sale.</Text>
           </View>
         ) : (
@@ -254,13 +348,54 @@ export default function POSScreen() {
             keyExtractor={(item) => item.product.id.toString()}
             renderItem={({ item }) => (
               <View style={s.cartItem}>
+                {/* Product info */}
                 <View style={{ flex: 1 }}>
                   <Text style={s.cartItemName} numberOfLines={1}>{item.product.name}</Text>
-                  <Text style={s.cartItemPrice}>₹{item.product.price} × {item.quantity}</Text>
+                  <Text style={s.cartItemPrice}>
+                    ₹{item.product.price} each
+                    {item.product.stock <= 5
+                      ? <Text style={s.stockWarning}>  ⚠ {item.product.stock} left</Text>
+                      : null
+                    }
+                  </Text>
                 </View>
+
+                {/* Quantity controls */}
+                <View style={s.qtyRow}>
+                  <TouchableOpacity
+                    style={s.qtyBtn}
+                    onPress={() => decreaseQty(item)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={s.qtyBtnText}>−</Text>
+                  </TouchableOpacity>
+
+                  <View style={s.qtyDisplay}>
+                    <Text style={s.qtyText}>{item.quantity}</Text>
+                  </View>
+
+                  <TouchableOpacity
+                    style={[
+                      s.qtyBtn,
+                      item.quantity >= item.product.stock && s.qtyBtnDisabled,
+                    ]}
+                    onPress={() => increaseQty(item)}
+                    activeOpacity={0.7}
+                    disabled={item.quantity >= item.product.stock}
+                  >
+                    <Text style={[
+                      s.qtyBtnText,
+                      item.quantity >= item.product.stock && s.qtyBtnTextDisabled,
+                    ]}>+</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Line total */}
                 <Text style={s.cartItemTotal}>
                   ₹{(Number(item.product.price) * item.quantity).toFixed(2)}
                 </Text>
+
+                {/* Remove */}
                 <TouchableOpacity style={s.removeBtn} onPress={() => removeFromCart(item.product.id)}>
                   <Text style={s.removeBtnText}>✕</Text>
                 </TouchableOpacity>
@@ -297,13 +432,44 @@ const s = StyleSheet.create({
   textPrimary: { color: Colors.textPrimary, fontSize: FontSize.md },
   permBtn: { backgroundColor: Colors.primary, paddingHorizontal: Spacing.xl, paddingVertical: 12, borderRadius: Radius.md },
   permBtnText: { color: '#fff', fontWeight: FontWeight.bold as any },
+
+  // ─── Camera ───────────────────────────────────────────────────────────────
   cameraContainer: { flex: 1, backgroundColor: '#000', overflow: 'hidden' },
   cameraOverlay: { ...StyleSheet.absoluteFill, alignItems: 'center' as const, justifyContent: 'center' as const },
-  scanFrame: { width: 250, height: 200, borderWidth: 2, borderColor: 'rgba(255,255,255,0.6)', borderRadius: Radius.lg },
-  visualScanBtn: { position: 'absolute' as const, bottom: 20, backgroundColor: Colors.primary, paddingHorizontal: Spacing.xl, paddingVertical: 14, borderRadius: Radius.full, minWidth: 160, alignItems: 'center' as const, elevation: 4, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
+
+  scanFrame: {
+    width: 260, height: 180,
+    borderRadius: Radius.md,
+    position: 'relative' as const,
+  },
+  scanHint: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: FontSize.xs,
+    marginTop: Spacing.sm,
+    letterSpacing: 0.5,
+  },
+
+  // Corner accent lines
+  corner: { position: 'absolute' as const, width: 24, height: 24, borderColor: Colors.primary, borderRadius: 3 },
+  cornerTL: { top: 0, left: 0, borderTopWidth: 3, borderLeftWidth: 3 },
+  cornerTR: { top: 0, right: 0, borderTopWidth: 3, borderRightWidth: 3 },
+  cornerBL: { bottom: 0, left: 0, borderBottomWidth: 3, borderLeftWidth: 3 },
+  cornerBR: { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3 },
+
+  visualScanBtn: {
+    position: 'absolute' as const, bottom: 20,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: Spacing.xl, paddingVertical: 14,
+    borderRadius: Radius.full, minWidth: 160, alignItems: 'center' as const,
+    elevation: 4, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 4, shadowOffset: { width: 0, height: 2 },
+  },
   visualScanBtnDisabled: { backgroundColor: Colors.surfaceHigh },
   visualScanBtnText: { color: '#fff', fontSize: FontSize.md, fontWeight: FontWeight.bold as any },
-  matchesOverlay: { position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.88)', paddingTop: 50, paddingHorizontal: Spacing.md },
+
+  matchesOverlay: {
+    position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.88)', paddingTop: 50, paddingHorizontal: Spacing.md,
+  },
   matchesTitle: { color: '#fff', fontSize: FontSize.xl, fontWeight: FontWeight.bold as any, marginBottom: Spacing.md, textAlign: 'center' as const },
   matchesSubtitle: { color: Colors.textMuted, textAlign: 'center' as const },
   matchItem: { flexDirection: 'row' as const, alignItems: 'center' as const, backgroundColor: Colors.surface, padding: Spacing.sm, borderRadius: Radius.md, marginBottom: Spacing.sm },
@@ -314,19 +480,63 @@ const s = StyleSheet.create({
   matchScore: { color: '#34C759', fontSize: FontSize.xs, fontWeight: FontWeight.bold as any },
   cancelMatchBtn: { marginVertical: Spacing.lg, alignItems: 'center' as const, padding: Spacing.md },
   cancelMatchBtnText: { color: Colors.textSecondary, fontSize: FontSize.md },
-  cartContainer: { flex: 1, backgroundColor: Colors.surface, borderTopLeftRadius: Radius.xl, borderTopRightRadius: Radius.xl, marginTop: -20, paddingTop: Spacing.lg, paddingHorizontal: Spacing.md, elevation: 10, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, shadowOffset: { width: 0, height: -4 } },
+
+  // ─── Cart ─────────────────────────────────────────────────────────────────
+  cartContainer: {
+    flex: 1, backgroundColor: Colors.surface,
+    borderTopLeftRadius: Radius.xl, borderTopRightRadius: Radius.xl,
+    marginTop: -20, paddingTop: Spacing.lg, paddingHorizontal: Spacing.md,
+    elevation: 10, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, shadowOffset: { width: 0, height: -4 },
+  },
   cartHeader: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const, marginBottom: Spacing.sm },
   cartTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold as any, color: Colors.textPrimary },
   cartCount: { fontSize: FontSize.sm, color: Colors.textMuted },
-  emptyCart: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const },
+  emptyCart: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const, gap: Spacing.sm },
+  emptyCartIcon: { fontSize: 36 },
   emptyCartText: { color: Colors.textMuted, fontSize: FontSize.sm },
-  cartItem: { flexDirection: 'row' as const, alignItems: 'center' as const, paddingVertical: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.border },
+
+  // Cart item row
+  cartItem: {
+    flexDirection: 'row' as const, alignItems: 'center' as const,
+    paddingVertical: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.border,
+    gap: Spacing.sm,
+  },
   cartItemName: { fontSize: FontSize.md, fontWeight: FontWeight.medium as any, color: Colors.textPrimary },
-  cartItemPrice: { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: 4 },
-  cartItemTotal: { fontSize: FontSize.sm, fontWeight: FontWeight.bold as any, color: Colors.textPrimary, marginRight: Spacing.sm },
-  removeBtn: { padding: 8, backgroundColor: 'rgba(255,59,48,0.1)', borderRadius: Radius.sm },
+  cartItemPrice: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 3 },
+  stockWarning: { color: Colors.warning, fontSize: FontSize.xs },
+
+  // Quantity controls
+  qtyRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    backgroundColor: Colors.surfaceHigh,
+    borderRadius: Radius.sm,
+    overflow: 'hidden' as const,
+  },
+  qtyBtn: {
+    width: 32, height: 32,
+    alignItems: 'center' as const, justifyContent: 'center' as const,
+    backgroundColor: Colors.borderLight,
+  },
+  qtyBtnDisabled: { backgroundColor: Colors.surfaceHigh },
+  qtyBtnText: { color: Colors.textPrimary, fontSize: FontSize.lg, fontWeight: FontWeight.bold as any, lineHeight: 22 },
+  qtyBtnTextDisabled: { color: Colors.textDisabled },
+  qtyDisplay: {
+    width: 36, height: 32,
+    alignItems: 'center' as const, justifyContent: 'center' as const,
+  },
+  qtyText: { color: Colors.textPrimary, fontSize: FontSize.sm, fontWeight: FontWeight.semibold as any },
+
+  cartItemTotal: { fontSize: FontSize.sm, fontWeight: FontWeight.bold as any, color: Colors.textPrimary },
+  removeBtn: { padding: 7, backgroundColor: 'rgba(255,59,48,0.12)', borderRadius: Radius.sm },
   removeBtnText: { color: '#FF3B30', fontWeight: FontWeight.bold as any, fontSize: FontSize.xs },
-  checkoutFooter: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const, paddingVertical: Spacing.md, paddingBottom: Spacing.xl, borderTopWidth: 1, borderTopColor: Colors.border },
+
+  // ─── Checkout ─────────────────────────────────────────────────────────────
+  checkoutFooter: {
+    flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const,
+    paddingVertical: Spacing.md, paddingBottom: Spacing.xl,
+    borderTopWidth: 1, borderTopColor: Colors.border,
+  },
   totalLabel: { fontSize: FontSize.sm, color: Colors.textMuted },
   totalAmount: { fontSize: FontSize.xl, fontWeight: FontWeight.bold as any, color: Colors.primary },
   checkoutBtn: { backgroundColor: Colors.primary, paddingHorizontal: Spacing.xl, paddingVertical: 14, borderRadius: Radius.md },
