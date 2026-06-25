@@ -1,0 +1,209 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ========================================
+// STORE & USER MODELS
+// ========================================
+
+model Store {
+  id        String   @id @default(uuid())
+  name      String
+  address   String?
+  phone     String?
+  logoUrl   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users     User[]
+}
+
+model User {
+  id             String   @id @default(uuid())
+  storeId        String
+  name           String
+  email          String   @unique
+  hashedPassword String
+  role           String   // "OWNER" | "CASHIER"
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  store          Store    @relation(fields: [storeId], references: [id])
+}
+
+// ========================================
+// PRODUCT & INVENTORY MODELS
+// ========================================
+
+model Product {
+  id              String   @id @default(uuid())
+  storeId         String
+  category        String
+  name            String
+  barcode         String   @unique
+  imageUrl        String?
+  parentProductId String?
+  variantName     String?
+
+  price           Float
+  minPrice        Float
+
+  totalQuantity   Int      @default(0)
+  minQuantity     Int      @default(0)
+
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  batches         InventoryBatch[]
+  orderItems      OrderItem[]
+  alerts          StockAlert[]
+  logs            InventoryLog[]
+}
+
+model InventoryBatch {
+  id                String   @id @default(uuid())
+  productId         String
+  storeId           String
+
+  quantityReceived  Int
+  quantityRemaining Int
+
+  dateArrived       DateTime @default(now())
+  manufacturedDate  DateTime?
+  expiryDate        DateTime?
+
+  wholesalePrice    Float
+
+  isActive          Boolean  @default(true)
+
+  product           Product  @relation(fields: [productId], references: [id])
+}
+
+// ========================================
+// ORDER & TRANSACTION MODELS
+// ========================================
+
+model Order {
+  id                      String   @id @default(uuid())
+  storeId                 String
+  cashierId               String
+  customerId              String?  // Optional loyal customer link
+
+  type                    String   // "SALE" | "REFUND"
+  refundOriginalOrderId   String?
+
+  // Totals
+  subtotal                Float
+  discount                Float
+  tax                     Float
+  grandTotal              Float
+
+  // Sales Analytics Fields
+  itemCount               Int      // Total distinct line items (basket size)
+  totalUnits              Int      // Total units sold across all items
+  paymentMethod           String   // "CASH" | "CARD" | "UPI" | "STORE_CREDIT"
+  discountReason          String?  // "COUPON" | "LOYALTY" | "CLEARANCE" | "MANAGER_OVERRIDE"
+
+  // Telemetry
+  isOfflineTransaction    Boolean  @default(false)
+  offlineSyncDelaySeconds Int?
+  checkoutDurationSeconds Int
+
+  createdAt               DateTime @default(now())
+
+  items                   OrderItem[]
+}
+
+model OrderItem {
+  id                String   @id @default(uuid())
+  orderId           String
+  productId         String
+
+  // Snapshots (frozen at time of sale for historical accuracy)
+  nameSnapshot      String
+  categorySnapshot  String
+  barcodeSnapshot   String   // Enables barcode-level analytics even if product is deleted
+
+  // Financial Snapshots
+  originalPrice     Float    // The listed price before any override
+  price             Float    // The actual price charged (may differ if overridden)
+  priceOverridden   Boolean  @default(false) // Flag: did cashier manually change price?
+  wholesalePrice    Float    // Cost price of the batch used
+  discountPerItem   Float    @default(0) // Item-level discount amount
+  quantity          Int
+  total             Float
+
+  // Refund tracking
+  refundedQuantity  Int      @default(0)
+
+  // AI Telemetry
+  scanMethod        String   // "BARCODE_SCAN" | "MANUAL_ENTRY" | "AI_CAMERA" | "QUICK_BUTTON"
+  aiConfidenceScore Float?
+
+  order             Order    @relation(fields: [orderId], references: [id])
+  product           Product  @relation(fields: [productId], references: [id])
+}
+
+// ========================================
+// ALERTS & INVENTORY TRACKING
+// ========================================
+
+model StockAlert {
+  id        String   @id @default(uuid())
+  storeId   String
+  productId String
+
+  title     String
+  message   String
+  priority  String   // "LOW" | "MEDIUM" | "HIGH"
+  isRead    Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+
+  product   Product  @relation(fields: [productId], references: [id])
+}
+
+model InventoryLog {
+  id           String   @id @default(uuid())
+  storeId      String
+  productId    String
+  batchId      String?
+
+  changeAmount Int
+  reason       String   // "SALE" | "RESTOCK" | "REFUND" | "EXPIRED" | "DAMAGED" | "THEFT" | "UNKNOWN"
+  notes        String?
+
+  createdAt    DateTime @default(now())
+
+  product      Product  @relation(fields: [productId], references: [id])
+}
+
+// ========================================
+// OLAP TELEMETRY MODELS
+// ========================================
+
+model AbandonedCart {
+  id        String   @id @default(uuid())
+  storeId   String
+  cashierId String
+  items     Json     // Snapshot of cart items at time of abandonment
+  itemCount Int
+  totalValue Float
+  reason    String?  // "CUSTOMER_LEFT" | "PAYMENT_FAILED" | "PRICE_DISPUTE"
+  createdAt DateTime @default(now())
+}
+
+model SearchFailure {
+  id          String   @id @default(uuid())
+  storeId     String
+  cashierId   String
+  searchQuery String   // What the cashier typed
+  searchType  String   // "BARCODE" | "NAME" | "CATEGORY"
+  createdAt   DateTime @default(now())
+}

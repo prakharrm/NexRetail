@@ -1,35 +1,73 @@
+version: '3.8'
 
 services:
+  # -------------------------
+  # DATABASES
+  # -------------------------
   postgres:
-    image: pgvector/pgvector:pg16
-    container_name: smartdukaan-db
-    restart: unless-stopped
+    image: postgres:15-alpine
+    container_name: sv-postgres
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: prakharrmahant
-      POSTGRES_DB: smartdukaan
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: nexretail
     ports:
-      - "5434:5432"   # 5434 on host → 5432 inside container
+      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
 
-  product-service:
-    build: 
-      context: ./sv-product-service
-      dockerfile: Dockerfile
-    container_name: smartdukaan-product-service
-    restart: unless-stopped
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: sv-clickhouse
     ports:
-      - "3000:3000"
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - chdata:/var/lib/clickhouse
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+
+  # -------------------------
+  # MICROSERVICES
+  # -------------------------
+  transaction-service:
+    build: 
+      context: .. # Root context so it can access sv-shared
+      dockerfile: sv-backend/sv-transaction-service/Dockerfile
+    container_name: sv-transaction-service
+    ports:
+      - "3001:3001"
     environment:
-      - DATABASE_URL=postgres://postgres:prakharrmahant@postgres:5432/smartdukaan
-      - PORT=3000
+      - DATABASE_URL=postgresql://user:password@postgres:5432/nexretail?schema=public
+      - PORT=3001
     depends_on:
       - postgres
-    volumes:
-      # Mount models and uploads so they persist across container restarts
-      - ./sv-product-service/models:/app/models
-      - ./sv-product-service/uploads:/app/uploads
+
+  user-service:
+    build: 
+      context: ..
+      dockerfile: sv-backend/sv-user-service/Dockerfile
+    container_name: sv-user-service
+    ports:
+      - "3002:3002"
+    environment:
+      - DATABASE_URL=postgresql://user:password@postgres:5432/nexretail?schema=public
+      - PORT=3002
+    depends_on:
+      - postgres
+
+  vision-service:
+    build:
+      context: ..
+      dockerfile: sv-backend/sv-vision-service/Dockerfile
+    container_name: sv-vision-service
+    ports:
+      - "3003:3003"
+    environment:
+      - PORT=3003
 
 volumes:
   pgdata:
+  chdata:

@@ -1,20 +1,50 @@
 
-// --- 1. PRODUCT & INVENTORY ---
+// --- 1. STORE & USER ---
+
+export interface Store {
+  id: string;
+  name: string;
+  address: string | null;
+  phone: string | null;
+  logoUrl: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export enum UserRole {
+  OWNER = 'OWNER',
+  CASHIER = 'CASHIER'
+}
+
+export interface User {
+  id: string;
+  storeId: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  isActive: boolean;
+  createdAt: Date;
+}
+
+// --- 2. PRODUCT & INVENTORY ---
 
 export interface Product {
-  id: string; // UUID
-  storeId: string; // Tenant ID
+  id: string;
+  storeId: string;
   category: string;
   name: string;
   barcode: string;
+  imageUrl: string | null;
+  parentProductId: string | null;
+  variantName: string | null;
 
   // Pricing
-  price: number; // Default selling price
-  minPrice: number; // Lowest allowed price 
+  price: number;
+  minPrice: number;
 
   // Aggregate Inventory
-  totalQuantity: number; // Sum of all active batches
-  minQuantity: number; // Alert threshold
+  totalQuantity: number;
+  minQuantity: number;
 
   isActive: boolean;
   createdAt: Date;
@@ -22,26 +52,26 @@ export interface Product {
 }
 
 export interface InventoryBatch {
-  id: string; // UUID
+  id: string;
   productId: string;
   storeId: string;
 
   // Batch Tracking
-  quantityReceived: number; // Initial amount delivered
-  quantityRemaining: number; // Current amount left in this specific batch
+  quantityReceived: number;
+  quantityRemaining: number;
 
   // Dates
   dateArrived: Date;
   manufacturedDate: Date | null;
   expiryDate: Date | null;
 
-  // Financials 
-  wholesalePrice: number; // The exact cost the vendor paid for *this specific batch*
+  // Financials
+  wholesalePrice: number;
 
   isActive: boolean;
 }
 
-// --- 2. ORDERS & TRANSACTIONS ---
+// --- 3. ORDERS & TRANSACTIONS ---
 
 export enum InvoiceType {
   SALE = 'SALE',
@@ -55,13 +85,21 @@ export enum PaymentMethod {
   STORE_CREDIT = 'STORE_CREDIT'
 }
 
+export enum DiscountReason {
+  COUPON = 'COUPON',
+  LOYALTY = 'LOYALTY',
+  CLEARANCE = 'CLEARANCE',
+  MANAGER_OVERRIDE = 'MANAGER_OVERRIDE'
+}
+
 export interface Order {
-  id: string; // UUID
+  id: string;
   storeId: string;
   cashierId: string;
+  customerId: string | null;
 
   type: InvoiceType;
-  refundOriginalOrderId: string | null; // If this is a refund, links to the original sale
+  refundOriginalOrderId: string | null;
 
   // Totals
   subtotal: number;
@@ -69,23 +107,27 @@ export interface Order {
   tax: number;
   grandTotal: number;
 
+  // Sales Analytics
+  itemCount: number;
+  totalUnits: number;
   paymentMethod: PaymentMethod;
+  discountReason: DiscountReason | null;
 
-  // Telemetry 
-  isOfflineTransaction: boolean; // Was this processed without internet?
-  offlineSyncDelaySeconds: number | null; // How long until it synced to the cloud?
-  checkoutDurationSeconds: number; // Time from first scan to successful payment
+  // Telemetry
+  isOfflineTransaction: boolean;
+  offlineSyncDelaySeconds: number | null;
+  checkoutDurationSeconds: number;
 
   createdAt: Date;
 }
 
-// --- 3. LINE ITEMS  ---
+// --- 4. LINE ITEMS ---
 
 export enum ScanMethod {
   BARCODE_SCAN = 'BARCODE_SCAN',
   MANUAL_ENTRY = 'MANUAL_ENTRY',
   AI_CAMERA = 'AI_CAMERA',
-  QUICK_BUTTON = 'QUICK_BUTTON' // Tapped from a hot-menu
+  QUICK_BUTTON = 'QUICK_BUTTON'
 }
 
 export interface OrderItem {
@@ -93,13 +135,17 @@ export interface OrderItem {
   orderId: string;
   productId: string;
 
-  // Snapshots 
+  // Snapshots
   nameSnapshot: string;
   categorySnapshot: string;
+  barcodeSnapshot: string;
 
   // Financial Snapshots
-  price: number; // Sell price applied at the time
-  wholesalePrice: number; // Exact cost price of the batch used
+  originalPrice: number;
+  price: number;
+  priceOverridden: boolean;
+  wholesalePrice: number;
+  discountPerItem: number;
   quantity: number;
   total: number;
 
@@ -108,15 +154,15 @@ export interface OrderItem {
 
   // AI Telemetry
   scanMethod: ScanMethod;
-  aiConfidenceScore: number | null; // e.g. 0.98 if recognized by object detection
+  aiConfidenceScore: number | null;
 }
 
-// --- 4. ALERTS & NOTIFICATIONS ---
+// --- 5. ALERTS & NOTIFICATIONS ---
 
 export enum AlertPriority {
   LOW = 'LOW',
-  MEDIUM = 'MEDIUM', // e.g. Low Stock
-  HIGH = 'HIGH' // e.g. Out of Stock or Expiring Today
+  MEDIUM = 'MEDIUM',
+  HIGH = 'HIGH'
 }
 
 export interface StockAlert {
@@ -132,7 +178,7 @@ export interface StockAlert {
   createdAt: Date;
 }
 
-// --- 5. INVENTORY LOGS (Shrinkage & Audit) ---
+// --- 6. INVENTORY LOGS ---
 
 export enum InventoryChangeReason {
   SALE = 'SALE',
@@ -150,9 +196,31 @@ export interface InventoryLog {
   productId: string;
   batchId: string | null;
 
-  changeAmount: number; // e.g. -2 or +50
+  changeAmount: number;
   reason: InventoryChangeReason;
   notes: string | null;
 
+  createdAt: Date;
+}
+
+// --- 7. OLAP TELEMETRY ---
+
+export interface AbandonedCart {
+  id: string;
+  storeId: string;
+  cashierId: string;
+  items: any;
+  itemCount: number;
+  totalValue: number;
+  reason: string | null;
+  createdAt: Date;
+}
+
+export interface SearchFailure {
+  id: string;
+  storeId: string;
+  cashierId: string;
+  searchQuery: string;
+  searchType: string;
   createdAt: Date;
 }

@@ -1,0 +1,36 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// User Service only needs User & Store models
+// Same database as Transaction Service
+
+model Store {
+  id        String   @id @default(uuid())
+  name      String
+  address   String?
+  phone     String?
+  logoUrl   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users     User[]
+}
+
+model User {
+  id             String   @id @default(uuid())
+  storeId        String
+  name           String
+  email          String   @unique
+  hashedPassword String
+  role           String   // "OWNER" | "CASHIER"
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  store          Store    @relation(fields: [storeId], references: [id])
+}
