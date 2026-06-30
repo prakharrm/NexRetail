@@ -1,0 +1,55 @@
+import { visionApi } from '../config/api';
+import { Endpoints } from '../config/network';
+
+// ── Types ────────────────────────────────────────────────────────
+
+export interface VisualMatch {
+  id: string;
+  name: string;
+  price: number;
+  sku: string;
+  stock: number;
+  barcode: string | null;
+  image_url: string | null;
+  similarity: number;
+}
+
+// ── Service ──────────────────────────────────────────────────────
+
+const VisionService = {
+  /**
+   * Upload an image to the vision service for ML-powered product search.
+   * Returns ranked matches with similarity scores.
+   */
+  searchByImage: async (
+    imageUri: string,
+    limit: number = 5,
+    threshold: number = 0.3,
+  ): Promise<VisualMatch[]> => {
+    const formData = new FormData();
+    formData.append('image', {
+      uri: imageUri,
+      name: 'scan.jpg',
+      type: 'image/jpeg',
+    } as any);
+    formData.append('limit', String(limit));
+    formData.append('threshold', String(threshold));
+
+    const res = await visionApi.post<VisualMatch[]>(
+      Endpoints.VISION_SEARCH_IMAGE,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+    return res.data;
+  },
+
+  /**
+   * Check if the ML model is loaded and ready for inference.
+   */
+  checkHealth: async (): Promise<{ status: string; model: string }> => {
+    const res = await visionApi.get(Endpoints.VISION_HEALTH);
+    return res.data;
+  },
+};
+
+export default VisionService;

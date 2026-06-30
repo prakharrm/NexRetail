@@ -15,14 +15,13 @@ import {
 import { useAudioPlayer } from 'expo-audio';
 import * as Haptics from 'expo-haptics';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/constants/theme';
-import { useProductStore, Product } from '../../src/store/useProductStore';
-import ProductService from '../../src/services/ProductService';
+import { useCatalogStore } from '../../src/store/useCatalogStore';
+import type { Product } from '../../src/services/CatalogService';
+import { useCartStore } from '../../src/store/useCartStore';
+import { useAuthStore } from '../../src/store/useAuthStore';
+import VisionService from '../../src/services/VisionService';
+import TelemetryService from '../../src/services/TelemetryService';
 import { NetworkConfig } from '../../src/config/network';
-
-interface CartItem {
-  product: Product;
-  quantity: number;
-}
 
 // ─── Capture mode: 'barcode' = scanning, 'photo' = about to capture ───────
 type CameraMode = 'barcode' | 'photo';
@@ -33,28 +32,36 @@ const RESCAN_COOLDOWN_MS = 2500;
 export default function POSScreen() {
   const { hasPermission, requestPermission } = useCameraPermission();
   const device = useCameraDevice('back');
-  const cameraRef = useRef<InstanceType<typeof Camera>>(null);
+  const cameraRef = useRef<any>(null);
 
   const [cameraMode, setCameraMode] = useState<CameraMode>('barcode');
   const [isCameraFrozen, setIsCameraFrozen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [visualMatches, setVisualMatches] = useState<any[] | null>(null);
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const user = useAuthStore((s) => s.user);
+  const store = useAuthStore((s) => s.store);
 
   // ─── Per-barcode "last seen" tracking ─────────────────────────────────────
-  // Maps barcode value → timestamp when it was last seen in a frame
   const lastSeenTimeRef = useRef<Map<string, number>>(new Map());
-  // Set of barcodes that have already been added during the current "appearance"
   const scannedInFrameRef = useRef<Set<string>>(new Set());
-  // Interval that prunes stale barcodes and allows rescanning
   const pruneIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Ref so barcode callback always sees latest values without re-creating output
   const isProcessingRef = useRef(false);
   const visualMatchesRef = useRef<any[] | null>(null);
 
-  const products = useProductStore((s) => s.products);
-  const fetchProducts = useProductStore((s) => s.fetchProducts);
+  // ─── Cart Store ───────────────────────────────────────────────────────────
+  const items = useCartStore((s) => s.items);
+  const addItem = useCartStore((s) => s.addItem);
+  const removeItem = useCartStore((s) => s.removeItem);
+  const updateQuantity = useCartStore((s) => s.updateQuantity);
+  const getSubtotal = useCartStore((s) => s.getSubtotal);
+  const checkout = useCartStore((s) => s.checkout);
+  const clearCart = useCartStore((s) => s.clearCart);
+  const isProcessingCheckout = useCartStore((s) => s.isProcessing);
+
+  const products = useCatalogStore((s) => s.products);
+  const fetchProducts = useCatalogStore((s) => s.fetchProducts);
 
   // ─── Audio player ──────────────────────────────────────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -128,7 +135,7 @@ export default function POSScreen() {
         // Mark as scanned for this appearance
         scannedInFrameRef.current.add(value);
 
-        const matched = productsRef.current.find((p) => p.barcode === value || p.sku === value);
+        const matched = productsRef.current.find((p) => p.barcode === value);
         if (matched) {
           addToCartRef.current(matched);
           playBeepRef.current();
@@ -145,52 +152,45 @@ export default function POSScreen() {
 
   const activeOutputs = cameraMode === 'photo' ? photoOutputs : barcodeOutputs;
 
-  // ─── Cart ─────────────────────────────────────────────────────────────────
+  // ─── Cart Handlers ─────────────────────────────────────────────────────────
   const addToCart = useCallback((product: Product) => {
-    setCart((prev) => {
-      const existing = prev.find((i) => i.product.id === product.id);
-      if (existing) {
-        // Respect stock limit
-        if (existing.quantity >= product.stock) return prev;
-        return prev.map((i) =>
-          i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i
-        );
-      }
-      return [{ product, quantity: 1 }, ...prev];
-    });
-  }, []);
-
-  const increaseQty = useCallback((item: CartItem) => {
-    if (item.quantity >= item.product.stock) {
+    // Check if we already have it to warn about stock limit
+    const existing = items.find((i) => i.productId === product.id);
+    if (existing && existing.quantity >= product.totalQuantity) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      Alert.alert('Stock Limit', `Only ${item.product.stock} unit(s) of "${item.product.name}" in stock.`);
+      Alert.alert('Stock Limit', `Only ${product.totalQuantity} unit(s) of "${product.name}" in stock.`);
       return;
     }
-    setCart((prev) =>
-      prev.map((i) =>
-        i.product.id === item.product.id ? { ...i, quantity: i.quantity + 1 } : i
-      )
-    );
-  }, []);
+    
+    addItem({
+      productId: product.id,
+      name: product.variantName && product.variantName !== 'Default' 
+        ? `${product.name} - ${product.variantName}` 
+        : product.name,
+      originalPrice: product.price,
+      price: product.price,
+      quantity: 1,
+    });
+  }, [items, addItem]);
 
-  const decreaseQty = useCallback((item: CartItem) => {
-    if (item.quantity <= 1) {
-      // Remove from cart when qty goes to 0
-      setCart((prev) => prev.filter((i) => i.product.id !== item.product.id));
+  const increaseQty = useCallback((cartKey: string, productId: string) => {
+    const product = products.find((p) => p.id === productId);
+    const item = items.find((i) => i.cartKey === cartKey);
+    if (product && item && item.quantity >= product.totalQuantity) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      Alert.alert('Stock Limit', `Only ${product.totalQuantity} unit(s) in stock.`);
       return;
     }
-    setCart((prev) =>
-      prev.map((i) =>
-        i.product.id === item.product.id ? { ...i, quantity: i.quantity - 1 } : i
-      )
-    );
-  }, []);
+    if (item) updateQuantity(cartKey, item.quantity + 1);
+  }, [items, products, updateQuantity]);
+
+  const decreaseQty = useCallback((cartKey: string) => {
+    const item = items.find((i) => i.cartKey === cartKey);
+    if (item) updateQuantity(cartKey, item.quantity - 1);
+  }, [items, updateQuantity]);
 
   // Keep addToCart ref in sync for barcode callback
   useEffect(() => { addToCartRef.current = addToCart; }, [addToCart]);
-
-  const removeFromCart = (productId: string) =>
-    setCart((prev) => prev.filter((i) => i.product.id !== productId));
 
   const resetCamera = useCallback(() => {
     setVisualMatches(null);
@@ -220,8 +220,17 @@ export default function POSScreen() {
       setIsCameraFrozen(true);
 
       const photoUri = filePath.startsWith('file://') ? filePath : `file://${filePath}`;
-      const matches = await ProductService.searchProductByImage(photoUri, 3);
+      const matches = await VisionService.searchByImage(photoUri, 3);
       setVisualMatches(matches);
+
+      // Log to telemetry if no matches found
+      if (matches.length === 0 && store?.id) {
+        TelemetryService.logSearchFailure({
+          storeId: store.id,
+          query: 'visual_scan',
+          searchType: 'IMAGE',
+        });
+      }
 
     } catch (err: any) {
       console.error('[VisualScan] Error full:', err);
@@ -236,12 +245,22 @@ export default function POSScreen() {
   const getFullImageUrl = (url: string | null) => {
     if (!url) return null;
     if (url.startsWith('http')) return url;
-    return `${NetworkConfig.API_URL}${url}`;
+    // Product images are served from the vision service's /uploads
+    return `${NetworkConfig.VISION_URL}${url}`;
   };
 
-  const cartTotal = cart.reduce(
-    (sum, item) => sum + Number(item.product.price) * item.quantity, 0
-  );
+  const cartTotal = getSubtotal();
+
+  const handleCheckout = async () => {
+    if (!store?.id || !user?.id) {
+      Alert.alert('Error', 'Missing user session details.');
+      return;
+    }
+    const success = await checkout(store.id, user.id);
+    if (success) {
+      Alert.alert('Success', 'Checkout completed successfully!');
+    }
+  };
 
   if (!hasPermission) {
     return (
@@ -335,26 +354,30 @@ export default function POSScreen() {
       <View style={s.cartContainer}>
         <View style={s.cartHeader}>
           <Text style={s.cartTitle}>Current Sale</Text>
-          <Text style={s.cartCount}>{cart.length} item{cart.length !== 1 ? 's' : ''}</Text>
+          <Text style={s.cartCount}>{items.length} item{items.length !== 1 ? 's' : ''}</Text>
         </View>
-        {cart.length === 0 ? (
+        {items.length === 0 ? (
           <View style={s.emptyCart}>
             <Text style={s.emptyCartIcon}>🛒</Text>
             <Text style={s.emptyCartText}>Scan an item to start a sale.</Text>
           </View>
         ) : (
           <FlatList
-            data={cart}
-            keyExtractor={(item) => item.product.id.toString()}
-            renderItem={({ item }) => (
+            data={items}
+            keyExtractor={(item) => item.cartKey}
+            renderItem={({ item }) => {
+              const productInfo = products.find(p => p.id === item.productId);
+              const maxStock = productInfo?.totalQuantity ?? 0;
+              
+              return (
               <View style={s.cartItem}>
                 {/* Product info */}
                 <View style={{ flex: 1 }}>
-                  <Text style={s.cartItemName} numberOfLines={1}>{item.product.name}</Text>
+                  <Text style={s.cartItemName} numberOfLines={1}>{item.name}</Text>
                   <Text style={s.cartItemPrice}>
-                    ₹{item.product.price} each
-                    {item.product.stock <= 5
-                      ? <Text style={s.stockWarning}>  ⚠ {item.product.stock} left</Text>
+                    ₹{item.price} each
+                    {maxStock <= 5
+                      ? <Text style={s.stockWarning}>  ⚠ {maxStock} left</Text>
                       : null
                     }
                   </Text>
@@ -364,7 +387,7 @@ export default function POSScreen() {
                 <View style={s.qtyRow}>
                   <TouchableOpacity
                     style={s.qtyBtn}
-                    onPress={() => decreaseQty(item)}
+                    onPress={() => decreaseQty(item.cartKey)}
                     activeOpacity={0.7}
                   >
                     <Text style={s.qtyBtnText}>−</Text>
@@ -377,30 +400,30 @@ export default function POSScreen() {
                   <TouchableOpacity
                     style={[
                       s.qtyBtn,
-                      item.quantity >= item.product.stock && s.qtyBtnDisabled,
+                      item.quantity >= maxStock && s.qtyBtnDisabled,
                     ]}
-                    onPress={() => increaseQty(item)}
+                    onPress={() => increaseQty(item.cartKey, item.productId)}
                     activeOpacity={0.7}
-                    disabled={item.quantity >= item.product.stock}
+                    disabled={item.quantity >= maxStock}
                   >
                     <Text style={[
                       s.qtyBtnText,
-                      item.quantity >= item.product.stock && s.qtyBtnTextDisabled,
+                      item.quantity >= maxStock && s.qtyBtnTextDisabled,
                     ]}>+</Text>
                   </TouchableOpacity>
                 </View>
 
                 {/* Line total */}
                 <Text style={s.cartItemTotal}>
-                  ₹{(Number(item.product.price) * item.quantity).toFixed(2)}
+                  ₹{(Number(item.price) * item.quantity).toFixed(2)}
                 </Text>
 
                 {/* Remove */}
-                <TouchableOpacity style={s.removeBtn} onPress={() => removeFromCart(item.product.id)}>
+                <TouchableOpacity style={s.removeBtn} onPress={() => removeItem(item.cartKey)}>
                   <Text style={s.removeBtnText}>✕</Text>
                 </TouchableOpacity>
               </View>
-            )}
+            )}}
           />
         )}
         <View style={s.checkoutFooter}>
@@ -409,16 +432,18 @@ export default function POSScreen() {
             <Text style={s.totalAmount}>₹{cartTotal.toFixed(2)}</Text>
           </View>
           <TouchableOpacity
-            style={[s.checkoutBtn, cart.length === 0 && s.checkoutBtnDisabled]}
-            disabled={cart.length === 0}
+            style={[s.checkoutBtn, (items.length === 0 || isProcessingCheckout) && s.checkoutBtnDisabled]}
+            disabled={items.length === 0 || isProcessingCheckout}
             onPress={() =>
               Alert.alert('Checkout', `Total: ₹${cartTotal.toFixed(2)}`, [
-                { text: 'Complete Sale', onPress: () => setCart([]) },
+                { text: 'Complete Sale', onPress: handleCheckout },
                 { text: 'Cancel', style: 'cancel' },
               ])
             }
           >
-            <Text style={s.checkoutBtnText}>Checkout</Text>
+            {isProcessingCheckout 
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={s.checkoutBtnText}>Checkout</Text>}
           </TouchableOpacity>
         </View>
       </View>
