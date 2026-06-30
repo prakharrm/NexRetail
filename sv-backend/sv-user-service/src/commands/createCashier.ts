@@ -1,10 +1,12 @@
 import type { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
+import type { CreateCashierPayload } from '@sv/shared';
 import prisma from '../prisma.js';
 
 export const createCashier = async (req: Request, res: Response) => {
   try {
-    const { storeId, name, email, password } = req.body;
+    const payload = req.body as CreateCashierPayload;
+    const { storeId, name, email, password } = payload;
     // TODO: Verify the requesting user is an OWNER via JWT middleware
 
     const existing = await prisma.user.findUnique({ where: { email } });

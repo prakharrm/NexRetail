@@ -1,9 +1,11 @@
 import type { Request, Response } from 'express';
+import type { CheckoutPayload } from '@sv/shared';
 import prisma from '../prisma.js';
 
 export const processCheckout = async (req: Request, res: Response) => {
   try {
-    const { storeId, cashierId, customerId, items, paymentMethod, discountReason, orderDiscount, isOfflineTransaction, checkoutDurationSeconds } = req.body;
+    const payload = req.body as CheckoutPayload;
+    const { storeId, cashierId, customerId, items, paymentMethod, discountReason, orderDiscount, isOfflineTransaction, checkoutDurationSeconds } = payload;
 
     const order = await prisma.$transaction(async (tx) => {
       let subtotal = 0;
@@ -17,8 +19,8 @@ export const processCheckout = async (req: Request, res: Response) => {
         return {
           productId: item.productId,
           nameSnapshot: item.name,
-          categorySnapshot: item.category,
-          barcodeSnapshot: item.barcode,
+          categorySnapshot: item.category ?? 'Uncategorized',
+          barcodeSnapshot: item.barcode ?? 'N/A',
           originalPrice: item.originalPrice ?? item.price,
           price: item.price,
           priceOverridden: item.priceOverridden ?? false,

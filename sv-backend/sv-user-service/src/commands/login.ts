@@ -1,13 +1,15 @@
 import type { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import type { LoginPayload } from '@sv/shared';
 import prisma from '../prisma.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'nexretail-dev-secret';
 
 export const login = async (req: Request, res: Response) => {
   try {
-    const { email, password } = req.body;
+    const payload = req.body as LoginPayload;
+    const { email, password } = payload;
 
     const user = await prisma.user.findUnique({
       where: { email },

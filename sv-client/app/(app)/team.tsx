@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import { View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/constants/theme';
 import { useAuthStore } from '../../src/store/useAuthStore';
-import AuthService, { UserInfo } from '../../src/services/AuthService';
+import AuthService from '../../src/services/AuthService';
+import type { User } from '@sv/shared';
 
-function CashierCard({ user }: { user: UserInfo }) {
+function CashierCard({ user }: { user: User }) {
   return (
     <View style={s.card}>
       <View style={s.avatar}>
@@ -24,7 +25,7 @@ function CashierCard({ user }: { user: UserInfo }) {
 export default function TeamScreen() {
   const store = useAuthStore((s) => s.store);
   const currentUser = useAuthStore((s) => s.user);
-  const [users, setUsers] = useState<UserInfo[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
 

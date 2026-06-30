@@ -16,7 +16,7 @@ import { useAudioPlayer } from 'expo-audio';
 import * as Haptics from 'expo-haptics';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/constants/theme';
 import { useCatalogStore } from '../../src/store/useCatalogStore';
-import type { Product } from '../../src/services/CatalogService';
+import type { Product } from '@sv/shared';
 import { useCartStore } from '../../src/store/useCartStore';
 import { useAuthStore } from '../../src/store/useAuthStore';
 import VisionService from '../../src/services/VisionService';

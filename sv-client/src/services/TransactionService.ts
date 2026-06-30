@@ -1,75 +1,7 @@
 import { txApi } from '../config/api';
 import { Endpoints } from '../config/network';
 
-// ── Types ────────────────────────────────────────────────────────
-
-export interface CheckoutItem {
-  productId: string;
-  name: string;
-  category?: string;
-  barcode?: string;
-  originalPrice: number;
-  price: number;
-  priceOverridden?: boolean;
-  wholesalePrice?: number;
-  discountPerItem?: number;
-  quantity: number;
-  scanMethod?: 'BARCODE_SCAN' | 'IMAGE_SEARCH' | 'MANUAL';
-  aiConfidenceScore?: number;
-}
-
-export interface CheckoutPayload {
-  storeId: string;
-  cashierId: string;
-  customerId?: string;
-  items: CheckoutItem[];
-  paymentMethod: string;
-  discountReason?: string;
-  orderDiscount?: number;
-  isOfflineTransaction?: boolean;
-  checkoutDurationSeconds?: number;
-}
-
-export interface RefundPayload {
-  orderId: string;
-  storeId: string;
-  cashierId: string;
-  items: { productId: string; quantity: number }[];
-  reason?: string;
-}
-
-export interface AdjustInventoryPayload {
-  storeId: string;
-  productId: string;
-  changeAmount: number;
-  reason: 'EXPIRED' | 'DAMAGED' | 'THEFT' | 'CORRECTION' | 'OTHER';
-  notes?: string;
-}
-
-export interface Order {
-  id: string;
-  storeId: string;
-  cashierId: string;
-  type: string;
-  subtotal: number;
-  discount: number;
-  tax: number;
-  grandTotal: number;
-  itemCount: number;
-  totalUnits: number;
-  paymentMethod: string;
-  createdAt: string;
-  items?: OrderItem[];
-}
-
-export interface OrderItem {
-  id: string;
-  productId: string;
-  nameSnapshot: string;
-  price: number;
-  quantity: number;
-  total: number;
-}
+import type { CheckoutItem, CheckoutPayload, RefundPayload, AdjustInventoryPayload, Order, OrderItem } from '@sv/shared';
 
 // ── Service ──────────────────────────────────────────────────────
 

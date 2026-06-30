@@ -224,3 +224,121 @@ export interface SearchFailure {
   searchType: string;
   createdAt: Date;
 }
+
+// ========================================
+// PAYLOADS (API CONTRACTS)
+// ========================================
+
+// --- Auth Payloads ---
+export interface RegisterStorePayload {
+  ownerName: string;
+  email: string;
+  password: string;
+  storeName: string;
+  storeAddress?: string;
+  storePhone?: string;
+}
+
+export interface LoginPayload {
+  email: string;
+  password: string;
+}
+
+export interface CreateCashierPayload {
+  storeId: string;
+  name: string;
+  email: string;
+  password: string;
+}
+
+export interface AuthResponse {
+  success: boolean;
+  token: string;
+  user: { id: string; name: string; email: string; role: string };
+  store: { id: string; name: string };
+}
+
+// --- Catalog Payloads ---
+export interface CreateProductPayload {
+  storeId: string;
+  category?: string;
+  name: string;
+  barcode?: string;
+  imageUrl?: string;
+  parentProductId?: string;
+  variantName?: string;
+  price: number;
+  minPrice?: number;
+  totalQuantity?: number;
+  minQuantity?: number;
+}
+
+export interface BulkOnboardPayload {
+  storeId: string;
+  parentName: string;
+  category?: string;
+  variants: {
+    variantName: string;
+    barcode?: string;
+    imageUrl?: string;
+    price: number;
+    minPrice?: number;
+    totalQuantity?: number;
+    minQuantity?: number;
+  }[];
+}
+
+export interface AddInventoryPayload {
+  storeId: string;
+  productId: string;
+  quantity: number;
+  costPrice?: number;
+  supplier?: string;
+  expiresAt?: string;
+  notes?: string;
+}
+
+// --- Transaction Payloads ---
+export interface CheckoutItem {
+  productId: string;
+  name: string;
+  category?: string;
+  barcode?: string;
+  originalPrice: number;
+  price: number;
+  priceOverridden?: boolean;
+  wholesalePrice?: number;
+  discountPerItem?: number;
+  quantity: number;
+  scanMethod?: 'BARCODE_SCAN' | 'IMAGE_SEARCH' | 'MANUAL';
+  aiConfidenceScore?: number;
+}
+
+export interface CheckoutPayload {
+  storeId: string;
+  cashierId: string;
+  customerId?: string;
+  items: CheckoutItem[];
+  paymentMethod: string;
+  discountReason?: string;
+  orderDiscount?: number;
+  isOfflineTransaction?: boolean;
+  checkoutDurationSeconds?: number;
+}
+
+export interface RefundPayload {
+  orderId: string;
+  storeId: string;
+  cashierId: string;
+  items: { productId: string; quantity: number }[];
+  reason?: string;
+}
+
+export interface AdjustInventoryPayload {
+  storeId: string;
+  productId: string;
+  changeAmount: number;
+  reason: 'EXPIRED' | 'DAMAGED' | 'THEFT' | 'CORRECTION' | 'OTHER';
+  notes?: string;
+}
+

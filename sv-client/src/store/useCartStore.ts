@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import TransactionService from '../services/TransactionService';
 import TelemetryService from '../services/TelemetryService';
-import type { CheckoutItem, CheckoutPayload, Order } from '../services/TransactionService';
+import type { CheckoutItem, CheckoutPayload, Order } from '@sv/shared';
 
 interface CartItem extends CheckoutItem {
   /** Local-only ID for cart management (productId may repeat for different price overrides) */

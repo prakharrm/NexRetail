@@ -3,24 +3,7 @@ import { Endpoints } from '../config/network';
 
 // ── Types ────────────────────────────────────────────────────────
 
-export interface Product {
-  id: string;
-  storeId: string;
-  category: string;
-  name: string;
-  barcode: string | null;
-  imageUrl: string | null;
-  parentProductId: string | null;
-  variantName: string | null;
-  price: number;
-  minPrice: number;
-  totalQuantity: number;
-  minQuantity: number;
-  isDeleted: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
+import type { Product } from '@sv/shared';
 export interface CreateProductPayload {
   storeId: string;
   category?: string;

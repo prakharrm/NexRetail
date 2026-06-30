@@ -3,7 +3,7 @@ import { View, Text, FlatList, StyleSheet, ActivityIndicator } from 'react-nativ
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/constants/theme';
 import { useCartStore } from '../../src/store/useCartStore';
 import { useAuthStore } from '../../src/store/useAuthStore';
-import type { Order } from '../../src/services/TransactionService';
+import type { Order } from '@sv/shared';
 
 function OrderCard({ order }: { order: Order }) {
   const date = new Date(order.createdAt).toLocaleString(undefined, {

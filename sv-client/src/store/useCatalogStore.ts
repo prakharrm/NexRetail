@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import CatalogService from '../services/CatalogService';
-import type { Product, CreateProductPayload, BulkOnboardPayload, AddInventoryPayload } from '../services/CatalogService';
+import type { Product, CreateProductPayload, BulkOnboardPayload, AddInventoryPayload } from '@sv/shared';
 
 interface CatalogState {
   // State

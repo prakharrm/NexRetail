@@ -8,7 +8,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/constants/theme';
 import { useCatalogStore } from '../../src/store/useCatalogStore';
 import { useAuthStore } from '../../src/store/useAuthStore';
-import type { Product } from '../../src/services/CatalogService';
+import type { Product } from '@sv/shared';
 import { NetworkConfig } from '../../src/config/network';
 
 function getFullImageUrl(url: string | null) {

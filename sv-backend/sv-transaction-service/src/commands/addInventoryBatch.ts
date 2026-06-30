@@ -1,9 +1,11 @@
 import type { Request, Response } from 'express';
+import type { AddInventoryPayload } from '@sv/shared';
 import prisma from '../prisma.js';
 
 export const addInventoryBatch = async (req: Request, res: Response) => {
   try {
-    const { productId, storeId, quantityReceived, wholesalePrice, manufacturedDate, expiryDate } = req.body;
+    const payload = req.body as AddInventoryPayload;
+    const { productId, storeId, quantity, costPrice, expiresAt, notes } = payload;
 
     const result = await prisma.$transaction(async (tx) => {
       // Create the batch
@@ -11,18 +13,17 @@ export const addInventoryBatch = async (req: Request, res: Response) => {
         data: {
           productId,
           storeId,
-          quantityReceived,
-          quantityRemaining: quantityReceived,
-          wholesalePrice,
-          manufacturedDate: manufacturedDate ? new Date(manufacturedDate) : null,
-          expiryDate: expiryDate ? new Date(expiryDate) : null,
+          quantityReceived: quantity,
+          quantityRemaining: quantity,
+          wholesalePrice: costPrice ?? 0,
+          expiryDate: expiresAt ? new Date(expiresAt) : null,
         }
       });
 
       // Update the aggregate totalQuantity on the Product
       await tx.product.update({
         where: { id: productId },
-        data: { totalQuantity: { increment: quantityReceived } }
+        data: { totalQuantity: { increment: quantity } }
       });
 
       // Log the inventory change
@@ -31,9 +32,9 @@ export const addInventoryBatch = async (req: Request, res: Response) => {
           storeId,
           productId,
           batchId: batch.id,
-          changeAmount: quantityReceived,
+          changeAmount: quantity,
           reason: 'RESTOCK',
-          notes: `Batch arrived. Wholesale price: ${wholesalePrice}`,
+          notes: notes || `Batch arrived. Wholesale price: ${costPrice ?? 0}`,
         }
       });
 

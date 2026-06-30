@@ -1,19 +1,23 @@
 import type { Request, Response } from 'express';
+import type { CreateProductPayload } from '@sv/shared';
 import prisma from '../prisma.js';
+
+const generateSKU = () => `SV-SKU-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
 export const createProduct = async (req: Request, res: Response) => {
   try {
-    const { storeId, category, name, barcode, imageUrl, parentProductId, variantName, price, minPrice, totalQuantity, minQuantity } = req.body;
+    const payload = req.body as CreateProductPayload;
+    const { storeId, category, name, barcode, imageUrl, parentProductId, variantName, price, minPrice, totalQuantity, minQuantity } = payload;
 
     const newProduct = await prisma.product.create({
       data: {
         storeId,
         category: category || 'Uncategorized',
         name,
-        barcode,
-        imageUrl,
-        parentProductId,
-        variantName,
+        barcode: barcode && barcode.trim() !== '' ? barcode : generateSKU(),
+        imageUrl: imageUrl ?? null,
+        parentProductId: parentProductId ?? null,
+        variantName: variantName ?? null,
         price,
         minPrice: minPrice ?? price,
         totalQuantity: totalQuantity ?? 0,

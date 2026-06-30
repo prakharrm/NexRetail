@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import AuthService from '../services/AuthService';
-import type { RegisterStorePayload, LoginPayload, UserInfo } from '../services/AuthService';
+import type { RegisterStorePayload, LoginPayload, User } from '@sv/shared';
 import { saveToken, clearToken, getToken } from '../config/api';
 
 interface AuthState {

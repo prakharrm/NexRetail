@@ -1,13 +1,15 @@
 import type { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import type { RegisterStorePayload } from '@sv/shared';
 import prisma from '../prisma.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'nexretail-dev-secret';
 
 export const registerStore = async (req: Request, res: Response) => {
   try {
-    const { ownerName, email, password, storeName, storeAddress, storePhone } = req.body;
+    const payload = req.body as RegisterStorePayload;
+    const { ownerName, email, password, storeName, storeAddress, storePhone } = payload;
 
     // Check if email already exists
     const existing = await prisma.user.findUnique({ where: { email } });
