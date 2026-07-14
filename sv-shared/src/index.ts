@@ -254,7 +254,7 @@ export interface CreateCashierPayload {
 export interface AuthResponse {
   success: boolean;
   token: string;
-  user: User;
+  user: { id: string; name: string; email: string; role: string };
   store: { id: string; name: string };
 }
 
@@ -341,4 +341,5 @@ export interface AdjustInventoryPayload {
   reason: 'EXPIRED' | 'DAMAGED' | 'THEFT' | 'CORRECTION' | 'OTHER';
   notes?: string;
 }
+
 

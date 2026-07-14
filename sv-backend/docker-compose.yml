@@ -41,7 +41,7 @@ services:
     ports:
       - "3001:3001"
     environment:
-      - DATABASE_URL=postgresql://user:password@postgres:5432/nexretail?schema=public
+      - DATABASE_URL=postgresql://sv_admin:sv_password@postgres:5432/nexretail?schema=public
       - PORT=3001
     depends_on:
       - postgres
@@ -54,7 +54,7 @@ services:
     ports:
       - "3002:3002"
     environment:
-      - DATABASE_URL=postgresql://user:password@postgres:5432/nexretail?schema=public
+      - DATABASE_URL=postgresql://sv_admin:sv_password@postgres:5432/nexretail?schema=public
       - PORT=3002
     depends_on:
       - postgres
