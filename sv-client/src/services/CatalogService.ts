@@ -47,7 +47,7 @@ export interface AddInventoryPayload {
 
 const CatalogService = {
   getCatalog: async (params?: { search?: string; category?: string }) => {
-    const res = await txApi.get<{ success: boolean; products: Product[] }>(
+    const res = await txApi.get<{ success: boolean; data: Product[] }>(
       Endpoints.PRODUCTS,
       { params },
     );
@@ -55,21 +55,21 @@ const CatalogService = {
   },
 
   getByBarcode: async (barcode: string) => {
-    const res = await txApi.get<{ success: boolean; product: Product }>(
+    const res = await txApi.get<{ success: boolean; data: Product }>(
       `${Endpoints.PRODUCTS}/barcode/${barcode}`,
     );
     return res.data;
   },
 
   getVariants: async (productId: string) => {
-    const res = await txApi.get<{ success: boolean; variants: Product[] }>(
+    const res = await txApi.get<{ success: boolean; data: Product[] }>(
       `${Endpoints.PRODUCTS}/${productId}/variants`,
     );
     return res.data;
   },
 
   createProduct: async (data: CreateProductPayload) => {
-    const res = await txApi.post<{ success: boolean; product: Product }>(
+    const res = await txApi.post<{ success: boolean; data: Product }>(
       Endpoints.PRODUCTS,
       data,
     );
@@ -82,7 +82,7 @@ const CatalogService = {
   },
 
   updateProduct: async (id: string, data: Partial<CreateProductPayload>) => {
-    const res = await txApi.put<{ success: boolean; product: Product }>(
+    const res = await txApi.put<{ success: boolean; data: Product }>(
       `${Endpoints.PRODUCTS}/${id}`,
       data,
     );

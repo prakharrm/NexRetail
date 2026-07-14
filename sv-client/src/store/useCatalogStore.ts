@@ -30,7 +30,7 @@ export const useCatalogStore = create<CatalogState>()((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const res = await CatalogService.getCatalog(params);
-      set({ products: res.products, isLoading: false });
+      set({ products: res.data ?? [], isLoading: false });
     } catch (err: any) {
       set({ error: err.response?.data?.error ?? err.message, isLoading: false });
     }
@@ -40,7 +40,7 @@ export const useCatalogStore = create<CatalogState>()((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const res = await CatalogService.createProduct(data);
-      set((s) => ({ products: [res.product, ...s.products], isLoading: false }));
+      set((s) => ({ products: [res.data, ...s.products], isLoading: false }));
       return true;
     } catch (err: any) {
       set({ error: err.response?.data?.error ?? err.message, isLoading: false });
@@ -54,7 +54,7 @@ export const useCatalogStore = create<CatalogState>()((set, get) => ({
       await CatalogService.bulkOnboard(data);
       // Refresh catalog after bulk insert
       const res = await CatalogService.getCatalog();
-      set({ products: res.products, isLoading: false });
+      set({ products: res.data ?? [], isLoading: false });
       return true;
     } catch (err: any) {
       set({ error: err.response?.data?.error ?? err.message, isLoading: false });
@@ -67,7 +67,7 @@ export const useCatalogStore = create<CatalogState>()((set, get) => ({
     try {
       const res = await CatalogService.updateProduct(id, data);
       set((s) => ({
-        products: s.products.map((p) => (p.id === id ? res.product : p)),
+        products: s.products.map((p) => (p.id === id ? res.data : p)),
         isLoading: false,
       }));
       return true;
@@ -115,7 +115,7 @@ export const useCatalogStore = create<CatalogState>()((set, get) => ({
   fetchLowStock: async () => {
     try {
       const res = await CatalogService.getLowStock();
-      set({ lowStockProducts: res.products ?? [] });
+      set({ lowStockProducts: res.data ?? [] });
     } catch {
       // silent — non-critical alert
     }
@@ -124,7 +124,7 @@ export const useCatalogStore = create<CatalogState>()((set, get) => ({
   lookupBarcode: async (barcode) => {
     try {
       const res = await CatalogService.getByBarcode(barcode);
-      return res.product ?? null;
+      return res.data ?? null;
     } catch {
       return null;
     }
