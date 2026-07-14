@@ -9,6 +9,7 @@ interface AuthState {
   user: User | null;
   store: { id: string; name: string } | null;
   isAuthenticated: boolean;
+  isHydrating: boolean;
   isLoading: boolean;
   error: string | null;
 
@@ -24,6 +25,7 @@ export const useAuthStore = create<AuthState>()((set) => ({
   user: null,
   store: null,
   isAuthenticated: false,
+  isHydrating: true,
   isLoading: false,
   error: null,
 
@@ -85,7 +87,10 @@ export const useAuthStore = create<AuthState>()((set) => ({
   hydrate: async () => {
     try {
       const token = await getToken();
-      if (!token) return;
+      if (!token) {
+        set({ isHydrating: false });
+        return;
+      }
 
       const res = await AuthService.getCurrentUser();
       set({
@@ -93,10 +98,12 @@ export const useAuthStore = create<AuthState>()((set) => ({
         user: res.user,
         store: res.store,
         isAuthenticated: true,
+        isHydrating: false,
       });
     } catch {
       // Token expired or invalid — clear it silently
       await clearToken();
+      set({ isHydrating: false });
     }
   },
 }));

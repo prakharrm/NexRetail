@@ -45,7 +45,7 @@ export default function AppLayout() {
       <Tabs.Screen
         name="history"
         options={{
-          title: 'History',
+          title: 'Transactions',
           tabBarIcon: ({ focused }) => <TabIcon name={focused ? 'receipt' : 'receipt-outline'} focused={focused} />,
         }}
       />

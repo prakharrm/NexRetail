@@ -34,7 +34,7 @@ services:
   # MICROSERVICES
   # -------------------------
   transaction-service:
-    build: 
+    build:
       context: .. # Root context so it can access sv-shared
       dockerfile: sv-backend/sv-transaction-service/Dockerfile
     container_name: sv-transaction-service
@@ -47,7 +47,7 @@ services:
       - postgres
 
   user-service:
-    build: 
+    build:
       context: ..
       dockerfile: sv-backend/sv-user-service/Dockerfile
     container_name: sv-user-service
@@ -67,6 +67,7 @@ services:
     ports:
       - "3003:3003"
     environment:
+      - DATABASE_URL=postgresql://sv_admin:sv_password@postgres:5432/nexretail?schema=public
       - PORT=3003
 
 volumes:

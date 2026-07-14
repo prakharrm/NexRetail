@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  FlatList, Alert, ActivityIndicator, Image,
+  FlatList, Alert, ActivityIndicator, Image, Modal
 } from 'react-native';
 import {
   Camera,
@@ -40,6 +40,10 @@ export default function POSScreen() {
   const [visualMatches, setVisualMatches] = useState<any[] | null>(null);
   const user = useAuthStore((s) => s.user);
   const store = useAuthStore((s) => s.store);
+
+  // ─── Variant Selector ───────────────────────────────────────────────────────
+  const [variantModalVisible, setVariantModalVisible] = useState(false);
+  const [selectedParentVariants, setSelectedParentVariants] = useState<Product[]>([]);
 
   // ─── Per-barcode "last seen" tracking ─────────────────────────────────────
   const lastSeenTimeRef = useRef<Map<string, number>>(new Map());
@@ -137,7 +141,7 @@ export default function POSScreen() {
 
         const matched = productsRef.current.find((p) => p.barcode === value);
         if (matched) {
-          addToCartRef.current(matched);
+          handleAddToCartWithVariantsRef.current(matched);
           playBeepRef.current();
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
@@ -173,6 +177,18 @@ export default function POSScreen() {
     });
   }, [items, addItem]);
 
+  const handleAddToCartWithVariants = useCallback((product: Product) => {
+    if (product.parentProductId) {
+      const siblings = products.filter((p) => p.parentProductId === product.parentProductId);
+      if (siblings.length > 1) {
+        setSelectedParentVariants(siblings);
+        setVariantModalVisible(true);
+        return;
+      }
+    }
+    addToCart(product);
+  }, [addToCart, products]);
+
   const increaseQty = useCallback((cartKey: string, productId: string) => {
     const product = products.find((p) => p.id === productId);
     const item = items.find((i) => i.cartKey === cartKey);
@@ -189,8 +205,9 @@ export default function POSScreen() {
     if (item) updateQuantity(cartKey, item.quantity - 1);
   }, [items, updateQuantity]);
 
-  // Keep addToCart ref in sync for barcode callback
-  useEffect(() => { addToCartRef.current = addToCart; }, [addToCart]);
+  // Keep handleAddToCartWithVariants ref in sync for barcode callback
+  const handleAddToCartWithVariantsRef = useRef<(product: Product) => void>(() => { });
+  useEffect(() => { handleAddToCartWithVariantsRef.current = handleAddToCartWithVariants; }, [handleAddToCartWithVariants]);
 
   const resetCamera = useCallback(() => {
     setVisualMatches(null);
@@ -325,7 +342,7 @@ export default function POSScreen() {
                   renderItem={({ item }) => (
                     <TouchableOpacity
                       style={s.matchItem}
-                      onPress={() => { addToCart(item); resetCamera(); }}
+                      onPress={() => { handleAddToCartWithVariants(item); resetCamera(); }}
                     >
                       {item.image_url
                         ? <Image source={{ uri: getFullImageUrl(item.image_url)! }} style={s.matchImage} />
@@ -447,6 +464,36 @@ export default function POSScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* VARIANT SELECTOR MODAL */}
+      <Modal visible={variantModalVisible} animationType="slide" transparent>
+        <View style={s.modalOverlay}>
+          <View style={s.modalContent}>
+            <Text style={s.modalTitle}>Select Variant</Text>
+            <FlatList
+              data={selectedParentVariants}
+              keyExtractor={item => item.id}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={s.modalVariantItem}
+                  onPress={() => {
+                    addToCart(item);
+                    setVariantModalVisible(false);
+                  }}
+                >
+                  <Text style={s.modalVariantName}>
+                    {item.variantName && item.variantName !== 'Default' ? item.variantName : item.name}
+                  </Text>
+                  <Text style={s.modalVariantPrice}>₹{item.price}</Text>
+                </TouchableOpacity>
+              )}
+            />
+            <TouchableOpacity style={s.modalCloseBtn} onPress={() => setVariantModalVisible(false)}>
+              <Text style={s.modalCloseText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -567,4 +614,14 @@ const s = StyleSheet.create({
   checkoutBtn: { backgroundColor: Colors.primary, paddingHorizontal: Spacing.xl, paddingVertical: 14, borderRadius: Radius.md },
   checkoutBtnDisabled: { backgroundColor: Colors.surfaceHigh },
   checkoutBtnText: { color: '#fff', fontSize: FontSize.md, fontWeight: FontWeight.bold as any },
+
+  // ─── Modal ──────────────────────────────────────────────────────────────────
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: Spacing.xl },
+  modalContent: { backgroundColor: Colors.surface, borderRadius: Radius.lg, padding: Spacing.lg, maxHeight: '80%' },
+  modalTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.bold as any, color: Colors.textPrimary, marginBottom: Spacing.md, textAlign: 'center' },
+  modalVariantItem: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  modalVariantName: { fontSize: FontSize.md, fontWeight: FontWeight.medium as any, color: Colors.textPrimary },
+  modalVariantPrice: { fontSize: FontSize.md, color: Colors.accent, fontWeight: FontWeight.bold as any },
+  modalCloseBtn: { marginTop: Spacing.lg, paddingVertical: 14, backgroundColor: Colors.surfaceHigh, borderRadius: Radius.md, alignItems: 'center' },
+  modalCloseText: { fontSize: FontSize.md, fontWeight: FontWeight.bold as any, color: Colors.textSecondary },
 });

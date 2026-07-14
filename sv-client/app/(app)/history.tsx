@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text, FlatList, StyleSheet, ActivityIndicator } from 'react-native';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/constants/theme';
 import { useCartStore } from '../../src/store/useCartStore';
@@ -6,10 +6,15 @@ import { useAuthStore } from '../../src/store/useAuthStore';
 import type { Order } from '@sv/shared';
 
 function OrderCard({ order }: { order: Order }) {
-  const date = new Date(order.createdAt).toLocaleString(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  });
+  let date = 'Unknown Date';
+  try {
+    date = new Date(order.createdAt).toLocaleString(undefined, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    });
+  } catch (e) {
+    date = new Date(order.createdAt).toDateString(); // Safe fallback for Android
+  }
 
   return (
     <View style={s.card}>
@@ -39,18 +44,23 @@ function OrderCard({ order }: { order: Order }) {
 export default function HistoryScreen() {
   const store = useAuthStore((s) => s.store);
   const { orderHistory, fetchHistory } = useCartStore();
-  const isLoading = orderHistory.length === 0;
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (store?.id) {
-      fetchHistory({ storeId: store.id });
+      setIsLoading(true);
+      fetchHistory({ storeId: store.id }).finally(() => {
+        setIsLoading(false);
+      });
+    } else {
+      setIsLoading(false);
     }
   }, [store?.id, fetchHistory]);
 
   return (
     <View style={s.container}>
       <View style={s.header}>
-        <Text style={s.title}>Order History</Text>
+        <Text style={s.title}>Transactions</Text>
         <Text style={s.subtitle}>Recent transactions</Text>
       </View>
 
@@ -100,7 +110,7 @@ const s = StyleSheet.create({
     marginBottom: Spacing.sm,
     paddingBottom: Spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
+    borderBottomColor: Colors.border, // Use border instead of borderLight to prevent crashes
   },
   orderId: { fontWeight: FontWeight.bold as any, color: Colors.textPrimary },
   orderDate: { fontSize: FontSize.xs, color: Colors.textMuted },

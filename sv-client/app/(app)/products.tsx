@@ -27,7 +27,7 @@ interface VariantInput {
   price: string;
   stock: string;
   barcode: string;
-  imageUri?: string;
+  imageUris: string[];
 }
 
 function AddProductForm({ onDone }: { onDone: () => void }) {
@@ -39,13 +39,13 @@ function AddProductForm({ onDone }: { onDone: () => void }) {
   const [parentName, setParentName] = useState('');
   const [category, setCategory] = useState('');
   const [variants, setVariants] = useState<VariantInput[]>([
-    { id: '1', variantName: 'Default', price: '', stock: '', barcode: '' }
+    { id: '1', variantName: 'Default', price: '', stock: '', barcode: '', imageUris: [] }
   ]);
 
   const addVariant = () => {
     setVariants(prev => [
       ...prev,
-      { id: Date.now().toString(), variantName: '', price: '', stock: '', barcode: '' }
+      { id: Date.now().toString(), variantName: '', price: '', stock: '', barcode: '', imageUris: [] }
     ]);
   };
 
@@ -61,6 +61,31 @@ function AddProductForm({ onDone }: { onDone: () => void }) {
     setVariants(prev => prev.map(v => v.id === id ? { ...v, [field]: value } : v));
   };
 
+  const handleAddPhoto = (id: string) => {
+    Alert.alert('Add Photo', 'Choose photo source', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Take Photo', onPress: () => takePhoto(id) },
+      { text: 'Choose from Gallery', onPress: () => pickImage(id) }
+    ]);
+  };
+
+  const takePhoto = async (id: string) => {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Permission needed', 'Camera permission is required.');
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      quality: 0.7,
+      allowsEditing: true,
+      aspect: [1, 1],
+    });
+    if (!result.canceled && result.assets[0]) {
+      setVariants(prev => prev.map(v => v.id === id ? { ...v, imageUris: [...v.imageUris, result.assets[0].uri] } : v));
+    }
+  };
+
   const pickImage = async (id: string) => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
@@ -69,7 +94,7 @@ function AddProductForm({ onDone }: { onDone: () => void }) {
       aspect: [1, 1],
     });
     if (!result.canceled && result.assets[0]) {
-      updateVariant(id, 'imageUri', result.assets[0].uri);
+      setVariants(prev => prev.map(v => v.id === id ? { ...v, imageUris: [...v.imageUris, result.assets[0].uri] } : v));
     }
   };
 
@@ -100,8 +125,7 @@ function AddProductForm({ onDone }: { onDone: () => void }) {
         price: parseFloat(v.price),
         totalQuantity: parseInt(v.stock, 10) || 0,
         barcode: v.barcode.trim() || undefined,
-        // In a real app we'd upload the image to the vision service and get the URL back.
-        // For now, we simulate image upload if needed or omit it.
+        imageUrl: v.imageUris.length > 0 ? v.imageUris[0] : undefined,
       }))
     };
 
@@ -118,7 +142,7 @@ function AddProductForm({ onDone }: { onDone: () => void }) {
       <ScrollView showsVerticalScrollIndicator={false}>
         <Text style={s.formTitle}>Add New Product</Text>
 
-        <View style={s.card}>
+        <View style={s.formCard}>
           <Text style={s.label}>Product Name (Parent) *</Text>
           <TextInput
             style={s.input} value={parentName} onChangeText={setParentName}
@@ -150,15 +174,18 @@ function AddProductForm({ onDone }: { onDone: () => void }) {
             </View>
 
             <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
-              <TouchableOpacity onPress={() => pickImage(variant.id)} style={s.variantImageBtn}>
-                {variant.imageUri ? (
-                  <Image source={{ uri: variant.imageUri }} style={s.variantImage} />
-                ) : (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ width: 80 }} contentContainerStyle={{ gap: Spacing.sm }}>
+                {variant.imageUris.map((uri, idx) => (
+                  <View key={idx} style={s.variantImageBtn}>
+                    <Image source={{ uri }} style={s.variantImage} />
+                  </View>
+                ))}
+                <TouchableOpacity onPress={() => handleAddPhoto(variant.id)} style={s.variantImageBtn}>
                   <View style={s.variantImagePlaceholder}>
                     <Text style={{ fontSize: 24, color: Colors.textMuted }}>📷</Text>
                   </View>
-                )}
-              </TouchableOpacity>
+                </TouchableOpacity>
+              </ScrollView>
               
               <View style={{ flex: 1 }}>
                 <Text style={s.label}>Size/Flavor *</Text>
@@ -309,6 +336,7 @@ const s = StyleSheet.create({
   emptySubtitle: { fontSize: FontSize.sm, color: Colors.textMuted, textAlign: 'center', marginTop: 4 },
   
   card: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.surface, borderRadius: Radius.md, padding: Spacing.sm, marginBottom: Spacing.sm, borderWidth: 1, borderColor: Colors.border },
+  formCard: { backgroundColor: Colors.surface, borderRadius: Radius.md, padding: Spacing.md, marginBottom: Spacing.sm, borderWidth: 1, borderColor: Colors.border },
   cardImage: { width: 52, height: 52, borderRadius: Radius.sm },
   cardImagePlaceholder: { backgroundColor: Colors.surfaceHigh, alignItems: 'center', justifyContent: 'center' },
   cardInfo: { flex: 1, marginLeft: Spacing.sm },
