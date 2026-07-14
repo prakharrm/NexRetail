@@ -1,0 +1,16 @@
+node_modules
+*/node_modules
+*/*/node_modules
+npm-debug.log
+Dockerfile
+.dockerignore
+.git
+.gitignore
+.env
+dist
+build
+.expo
+.vscode
+sv-client
+sv-client/android
+sv-client/ios

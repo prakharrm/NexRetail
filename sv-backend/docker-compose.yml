@@ -61,8 +61,8 @@ services:
 
   vision-service:
     build:
-      context: ..
-      dockerfile: sv-backend/sv-vision-service/Dockerfile
+      context: sv-vision-service
+      dockerfile: Dockerfile
     container_name: sv-vision-service
     ports:
       - "3003:3003"

@@ -1,5 +1,5 @@
 # Base image
-FROM node:18-alpine
+FROM node:20-alpine
 
 # Set working directory
 WORKDIR /app
@@ -31,5 +31,5 @@ COPY sv-backend/sv-transaction-service/ ./
 # Expose port
 EXPOSE 3001
 
-# Start the server (assuming nodemon or node index.js)
-CMD ["npx", "ts-node", "index.ts"]
+# Start the server (assuming nodemon or node src/index.ts)
+CMD ["npm", "start"]

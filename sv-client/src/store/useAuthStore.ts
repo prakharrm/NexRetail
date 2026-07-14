@@ -90,12 +90,8 @@ export const useAuthStore = create<AuthState>()((set) => ({
       const res = await AuthService.getCurrentUser();
       set({
         token,
-        user: {
-          id: res.user.id,
-          name: res.user.name,
-          email: res.user.email,
-          role: res.user.role,
-        },
+        user: res.user,
+        store: res.store,
         isAuthenticated: true,
       });
     } catch {

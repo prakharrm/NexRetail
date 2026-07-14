@@ -1,5 +1,5 @@
 # Base image
-FROM node:18-alpine
+FROM node:20-alpine
 
 # Set working directory
 WORKDIR /app
@@ -19,9 +19,11 @@ RUN npm run build
 
 # Install service dependencies
 WORKDIR /app/sv-backend/sv-user-service
-# (Assuming npm init has been run, otherwise just npm install will fail without package.json, 
-# but this is a boilerplate to be filled later)
-RUN if [ -f "package.json" ]; then npm install; fi
+RUN npm install
+
+# Copy Prisma schema and generate client
+COPY sv-backend/sv-user-service/prisma ./prisma/
+RUN npx prisma generate
 
 # Copy the rest of the application
 COPY sv-backend/sv-user-service/ ./
@@ -30,4 +32,4 @@ COPY sv-backend/sv-user-service/ ./
 EXPOSE 3002
 
 # Start the server
-CMD ["echo", "User service not fully implemented yet"]
+CMD ["npm", "start"]
