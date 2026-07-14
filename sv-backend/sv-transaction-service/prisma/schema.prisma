@@ -1,10 +1,12 @@
 generator client {
-  provider = "prisma-client-js"
-  output   = "../node_modules/.prisma/client"
+  provider        = "prisma-client-js"
+  output          = "../node_modules/.prisma/client"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider   = "postgresql"
+  extensions = [vector]
 }
 
 // ========================================
@@ -207,3 +209,5 @@ model SearchFailure {
   searchType  String   // "BARCODE" | "NAME" | "CATEGORY"
   createdAt   DateTime @default(now())
 }
+
+

@@ -281,6 +281,7 @@ export interface BulkOnboardPayload {
     variantName: string;
     barcode?: string;
     imageUrl?: string;
+    imageUris?: string[];
     price: number;
     minPrice?: number;
     totalQuantity?: number;

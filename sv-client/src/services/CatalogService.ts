@@ -26,6 +26,7 @@ export interface BulkOnboardPayload {
     variantName: string;
     barcode?: string;
     imageUrl?: string;
+    imageUris?: string[]; // Added for VisionService
     price: number;
     minPrice?: number;
     totalQuantity?: number;

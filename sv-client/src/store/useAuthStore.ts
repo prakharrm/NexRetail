@@ -36,7 +36,7 @@ export const useAuthStore = create<AuthState>()((set) => ({
       await saveToken(res.token);
       set({
         token: res.token,
-        user: res.user,
+        user: { ...res.user, storeId: res.store.id, isActive: true, createdAt: new Date() } as any,
         store: res.store,
         isAuthenticated: true,
         isLoading: false,
@@ -56,7 +56,7 @@ export const useAuthStore = create<AuthState>()((set) => ({
       await saveToken(res.token);
       set({
         token: res.token,
-        user: res.user,
+        user: { ...res.user, storeId: res.store.id, isActive: true, createdAt: new Date() } as any,
         store: res.store,
         isAuthenticated: true,
         isLoading: false,

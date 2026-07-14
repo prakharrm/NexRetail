@@ -126,6 +126,7 @@ function AddProductForm({ onDone }: { onDone: () => void }) {
         totalQuantity: parseInt(v.stock, 10) || 0,
         barcode: v.barcode.trim() || undefined,
         imageUrl: v.imageUris.length > 0 ? v.imageUris[0] : undefined,
+        imageUris: v.imageUris,
       }))
     };
 
@@ -289,6 +290,9 @@ export default function ProductsScreen() {
   const fetchProducts = useCatalogStore((s) => s.fetchProducts);
   const [showForm, setShowForm] = useState(false);
 
+  const parentIds = new Set(products.map(p => p.parentProductId).filter(Boolean));
+  const displayProducts = products.filter(p => !parentIds.has(p.id));
+
   useEffect(() => {
     fetchProducts();
   }, [fetchProducts]);
@@ -304,14 +308,14 @@ export default function ProductsScreen() {
         <Text style={s.headerCount}>{products.length} variant(s)</Text>
       </View>
 
-      {products.length === 0 ? (
+      {displayProducts.length === 0 ? (
         <View style={s.empty}>
           <Text style={s.emptyTitle}>No products yet</Text>
           <Text style={s.emptySubtitle}>Tap the button below to add your first product.</Text>
         </View>
       ) : (
         <FlatList
-          data={products}
+          data={displayProducts}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => <ProductCard item={item} />}
           contentContainerStyle={{ padding: Spacing.md, paddingBottom: 100 }}

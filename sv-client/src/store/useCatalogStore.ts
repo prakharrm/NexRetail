@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import CatalogService from '../services/CatalogService';
+import VisionService from '../services/VisionService';
 import type { Product, CreateProductPayload, BulkOnboardPayload, AddInventoryPayload } from '@sv/shared';
 
 interface CatalogState {
@@ -51,7 +52,27 @@ export const useCatalogStore = create<CatalogState>()((set, get) => ({
   bulkOnboard: async (data) => {
     set({ isLoading: true, error: null });
     try {
-      await CatalogService.bulkOnboard(data);
+      const result = await CatalogService.bulkOnboard(data);
+      
+      // Extract created variants
+      const createdVariants = result?.data?.variants || [];
+      
+      // Onboard to Vision Service in the background
+      data.variants.forEach((inputVariant, i) => {
+        const createdVariant = createdVariants[i];
+        if (inputVariant.imageUris && inputVariant.imageUris.length > 0 && createdVariant) {
+          VisionService.onboardProduct({
+            name: createdVariant.name,
+            price: createdVariant.price,
+            sku: createdVariant.barcode,
+            stock: createdVariant.totalQuantity,
+            barcode: createdVariant.barcode,
+          }, inputVariant.imageUris).catch(err => {
+            console.error('Vision sync failed for', createdVariant.name, err);
+          });
+        }
+      });
+
       // Refresh catalog after bulk insert
       const res = await CatalogService.getCatalog();
       set({ products: res.data ?? [], isLoading: false });

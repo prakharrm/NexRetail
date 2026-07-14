@@ -31,8 +31,8 @@ export const logSearchFailure = async (req: Request, res: Response) => {
     const event = await prisma.searchFailure.create({
       data: {
         storeId,
-        cashierId,
-        searchQuery,
+        cashierId: cashierId ?? 'SYSTEM',
+        searchQuery: searchQuery ?? '',
         searchType: searchType ?? 'NAME',
       }
     });

@@ -39,6 +39,7 @@ export const Endpoints = {
   TELEMETRY_SEARCH_FAIL: '/api/telemetry/search-failure',
 
   // Vision (Vision Service)
+  VISION_PRODUCT_CREATE: '/api/products',
   VISION_SEARCH_IMAGE: '/api/products/search-image',
   VISION_HEALTH: '/api/health',
 } as const;
