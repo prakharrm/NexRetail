@@ -163,7 +163,8 @@ export const useCartStore = create<CartState>()((set, get) => ({
   fetchHistory: async (params) => {
     try {
       const res = await TransactionService.getHistory(params);
-      set({ orderHistory: res.orders, historyTotal: res.total });
+      // Backend returns `{ success: true, data: Order[] }`
+      set({ orderHistory: res.data ?? [] });
     } catch {
       // silent
     }

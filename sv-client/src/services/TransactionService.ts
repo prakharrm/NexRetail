@@ -25,7 +25,7 @@ const TransactionService = {
   },
 
   getHistory: async (params?: { page?: number; limit?: number; storeId?: string }) => {
-    const res = await txApi.get<{ success: boolean; orders: Order[]; total: number }>(
+    const res = await txApi.get<{ success: boolean; data: Order[] }>(
       Endpoints.ORDER_HISTORY,
       { params },
     );
