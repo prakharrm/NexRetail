@@ -52,7 +52,15 @@ export const registerStore = async (req: Request, res: Response) => {
     res.status(201).json({
       success: true,
       token,
-      user: { id: result.owner.id, name: result.owner.name, email: result.owner.email, role: 'OWNER' },
+      user: { 
+        id: result.owner.id, 
+        storeId: result.owner.storeId,
+        name: result.owner.name, 
+        email: result.owner.email, 
+        role: result.owner.role,
+        isActive: result.owner.isActive,
+        createdAt: result.owner.createdAt
+      },
       store: { id: result.store.id, name: result.store.name },
     });
   } catch (error) {

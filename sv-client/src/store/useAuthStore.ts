@@ -6,7 +6,7 @@ import { saveToken, clearToken, getToken } from '../config/api';
 interface AuthState {
   // State
   token: string | null;
-  user: { id: string; name: string; email: string; role: string } | null;
+  user: User | null;
   store: { id: string; name: string } | null;
   isAuthenticated: boolean;
   isLoading: boolean;

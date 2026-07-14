@@ -26,7 +26,7 @@ const AuthService = {
     return res.data;
   },
 
-  getCurrentUser: async (): Promise<{ success: boolean; user: User }> => {
+  getCurrentUser: async (): Promise<{ success: boolean; user: User; store: { id: string; name: string } }> => {
     const res = await userApi.get(Endpoints.CURRENT_USER);
     return res.data;
   },

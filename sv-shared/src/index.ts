@@ -254,7 +254,7 @@ export interface CreateCashierPayload {
 export interface AuthResponse {
   success: boolean;
   token: string;
-  user: { id: string; name: string; email: string; role: string };
+  user: User;
   store: { id: string; name: string };
 }
 
